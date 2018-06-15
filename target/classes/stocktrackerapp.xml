@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:metadata="http://www.mulesoft.org/schema/mule/metadata" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:context="http://www.springframework.org/schema/context" xmlns:tls="http://www.mulesoft.org/schema/mule/tls" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd">
+    <context:property-placeholder location="default.properties"/>
+    <http:request-config name="HTTP_Request_Configuration" host="www.alphavantage.co" port="80" connectionIdleTimeout="30000000" responseTimeout="30000000" doc:name="HTTP Request Configuration"/>
+    <flow name="stocktrackerappFlow">
+        <poll doc:name="Poll">
+            <fixed-frequency-scheduler frequency="${poll.freq}" timeUnit="MINUTES"/>
+            <logger message="Getting Info" level="INFO" doc:name="Logger"/>
+        </poll>
+        <set-variable variableName="stocks" value="#[${stocks}]" doc:name="stocks array"/>
+        <set-variable variableName="rules" value="#[${minMaxRules}]" doc:name="rules"/>
+        <logger message="#[flowVars.rules]" level="DEBUG" doc:name="display rules"/>
+        <logger message="#[flowVars.stocks]" level="DEBUG" doc:name="display stocks"/>
+        <foreach collection="#[flowVars.stocks]" doc:name="For Each Stock ">
+            <http:request config-ref="HTTP_Request_Configuration" path="#[&quot;/query?function=TIME_SERIES_INTRADAY&amp;interval=1min&amp;apikey=P8BW72FKWVG0NIZO&amp;symbol=&quot; + payload]" method="GET" doc:name="HTTP">
+            </http:request>
+            <dw:transform-message metadata:id="31f92e03-82da-49fe-a63f-daa50e44f166" doc:name="Transform Message">
+                <dw:input-payload doc:sample="examples/responseSimple.json" mimeType="application/json"/>
+                <dw:set-payload><![CDATA[%dw 1.0
+%output application/json 
+---
+{
+	"Stock" : payload."Meta Data"."2. Symbol",
+	"Time" : payload."Meta Data"."3. Last Refreshed",
+	"Price" : payload."Time Series (1min)"[0]."1. open",
+	"Details" : payload."Time Series (1min)"[0]
+}]]></dw:set-payload>
+            </dw:transform-message>
+            <logger level="DEBUG" doc:name="Display stock info" message="#[payload]"/>
+        </foreach>
+    </flow>
+</mule>
